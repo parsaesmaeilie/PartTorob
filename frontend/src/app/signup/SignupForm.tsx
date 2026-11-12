@@ -14,6 +14,7 @@ export function SignupForm({ initialPhone = "" }: { initialPhone?: string }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState(initialPhone);
   const [shopName, setShopName] = useState("");
+  const [shopWebsite, setShopWebsite] = useState("");
   const [sent, setSent] = useState<OtpSent | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +27,7 @@ export function SignupForm({ initialPhone = "" }: { initialPhone?: string }) {
         onEditPhone={() => setSent(null)}
         onResend={async () => setSent(await requestOtp(sent.phone))}
         onVerify={async (code) => {
-          await openSession({ mode: "signup", phone: sent.phone, code, name, role, shopName: role === "seller" ? shopName : null });
+          await openSession({ mode: "signup", phone: sent.phone, code, name, role, shopName: role === "seller" ? shopName : null, shopWebsite: role === "seller" ? shopWebsite : null });
           // new customers start by adding their car; new shops wait for approval
           router.replace(role === "seller" ? "/seller" : "/garage?welcome=1");
           router.refresh();
@@ -79,6 +80,19 @@ export function SignupForm({ initialPhone = "" }: { initialPhone?: string }) {
       {role === "seller" && (
         <>
           <input value={shopName} onChange={(e) => setShopName(e.target.value)} required placeholder="نام فروشگاه" className="input py-3" />
+          <label className="block">
+            <input
+              value={shopWebsite}
+              onChange={(e) => setShopWebsite(e.target.value)}
+              required
+              inputMode="url"
+              dir="ltr"
+              placeholder="https://myshop.ir"
+              className="input py-3 text-left"
+              aria-label="آدرس سایت فروشگاه"
+            />
+            <span className="mt-1 block text-[11px] text-muted">آدرس سایت فروشگاه — خریداران با کلیک «خرید» به همین سایت هدایت می‌شوند.</span>
+          </label>
           <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-800">حساب فروشگاه پس از بررسی و تأیید ادمین فعال می‌شود.</p>
         </>
       )}

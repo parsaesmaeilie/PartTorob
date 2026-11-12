@@ -11,7 +11,14 @@ from app.core.text import normalize_text
 from app.modules.catalog.taxonomy import BRANDS, CATEGORIES
 from app.modules.vehicles import detect_vehicles
 
-Priority = Literal["balanced", "cheap", "quality", "fast"]
+Priority = Literal["balanced", "cheap", "quality", "fast", "warranty"]
+# each priority: trigger words (normalized text; آ→ا) — all matches stack, order = order of appearance
+_PRIORITY_WORDS: dict[str, str] = {
+    "cheap": r"ارزان|ارزون|اقتصادی|کم ?هزینه|مقرون|ارزونترین|ارزانترین",
+    "quality": r"اصل|کیفیت|اورجینال|مطمئن|بهترین|حرفه ای|معتبر|درجه یک",
+    "fast": r"فوری|امروز|سریع|فردا|زود|عجله|ارسال",
+    "warranty": r"گارانتی|ضمانت|وارانتی",
+}
 
 
 class SearchIntent(Schema):
@@ -22,7 +29,8 @@ class SearchIntent(Schema):
     viscosity: str | None = None
     position: Literal["front", "rear"] | None = None
     max_price: int | None = None
-    priority: Priority = "balanced"
+    priority: Priority = "balanced"  # the first one the user mentioned (kept for simple consumers)
+    priorities: list[Priority] = []  # every priority mentioned — weights stack
     terms: list[str] = []
 
 
@@ -62,18 +70,15 @@ def parse_intent(query: str) -> SearchIntent:
     brand = next((b.id for b in BRANDS.values() if any(normalize_text(f) in remaining for f in b.forms)), None)
     visc = _VISC.search(t)
 
-    priority: Priority = "balanced"
-    if re.search(r"ارزان|ارزون|اقتصادی|کم ?هزینه", t):
-        priority = "cheap"
-    elif re.search(r"اصل|کیفیت|اورجینال|مطمئن|بهترین|حرفه ای", t):
-        priority = "quality"
-    elif re.search(r"فوری|امروز|سریع|فردا", t):
-        priority = "fast"
+    found = [(m.start(), p) for p, rx in _PRIORITY_WORDS.items() if (m := re.search(rx, t))]
+    priorities: list[Priority] = [p for _, p in sorted(found)]  # type: ignore[misc]
 
     # spec / price phrases are structured now — drop them from free-text terms
     remaining = _PRICE.sub(" ", remaining)
     remaining = _VISC.sub(" ", remaining)
-    remaining = re.sub(r"ارزان|ارزون|اقتصادی|اصل|اورجینال|فوری|سریع|جلو|عقب", " ", remaining)
+    for rx in _PRIORITY_WORDS.values():  # priority words are not product words
+        remaining = re.sub(rx, " ", remaining)
+    remaining = re.sub(r"جلو|عقب|خیلی|هم|باشه|باشد|داشته", " ", remaining)
     terms = [w for w in remaining.split() if w not in _STOP and len(w) > 1]
 
     return SearchIntent(
@@ -84,6 +89,7 @@ def parse_intent(query: str) -> SearchIntent:
         viscosity=f"{visc.group(1)}W{visc.group(2)}" if visc else None,
         position="front" if "جلو" in t else "rear" if "عقب" in t else None,
         max_price=_max_price(t),
-        priority=priority,
+        priority=priorities[0] if priorities else "balanced",
+        priorities=priorities,
         terms=terms,
     )

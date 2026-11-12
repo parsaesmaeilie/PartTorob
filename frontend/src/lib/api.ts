@@ -37,7 +37,7 @@ export const api = {
   me: () => get<Me>("/me"),
   /** null for guests (login / signup pages) instead of redirecting. */
   meOptional: () => get<Me | null>("/me", undefined, { optional: true }),
-  search: (p: { q?: string; cat?: string; car?: string; all?: boolean; any_car?: boolean; limit?: number }) => get<SearchResponse>("/search", p),
+  search: (p: { q?: string; cat?: string; car?: string; all?: boolean; any_car?: boolean; brand?: string; limit?: number }) => get<SearchResponse>("/search", p),
   product: (id: string) => get<ProductDetail>(`/products/${encodeURIComponent(id)}`),
   compare: (ids: string[]) => get<CompareResponse>("/products", { ids: ids.join(",") }),
   garage: (v?: string) => get<Garage>("/garage", { v }),

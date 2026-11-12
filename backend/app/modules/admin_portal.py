@@ -21,6 +21,7 @@ class ShopRow(Schema):
     owner_id: str | None
     owner_name: str | None
     owner_phone: str | None
+    website: str | None
     status: str  # active | pending | blocked | unclaimed
 
 
@@ -69,13 +70,13 @@ def overview(s: Session) -> AdminOverview:
     shops = [
         ShopRow(seller_id=src.id, name=src.name, source="crawled", trust=src.trust, listings=listings_by_seller.get(src.id, 0),
                 clicks=clicks_by_seller.get(src.id, 0), owner_id=(o := owners.get(src.id)) and o.id, owner_name=o and o.name,
-                owner_phone=o and o.phone, status=o.status if o else "unclaimed")
+                owner_phone=o and o.phone, website=o and o.shop_website, status=o.status if o else "unclaimed")
         for src in SOURCES
     ]
     crawled = {x.id for x in SOURCES}
     shops += [
         ShopRow(seller_id=sid, name=u.shop_name or "فروشگاه", source="registered", trust=None, listings=listings_by_seller.get(sid, 0),
-                clicks=clicks_by_seller.get(sid, 0), owner_id=u.id, owner_name=u.name, owner_phone=u.phone, status=u.status)
+                clicks=clicks_by_seller.get(sid, 0), owner_id=u.id, owner_name=u.name, owner_phone=u.phone, website=u.shop_website, status=u.status)
         for sid, u in owners.items() if sid not in crawled
     ]
 

@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { Camera, Car, Globe2, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Camera, Car, Globe2, SlidersHorizontal, Sparkles, Tag } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatToman, toPersianDigits } from "@/shared/text";
 import { ProductCard } from "@/components/product";
 
 export const dynamic = "force-dynamic";
 
-const PRIORITY_FA = { balanced: "متعادل", cheap: "ارزان‌ترین", quality: "کیفیت و اصالت", fast: "ارسال سریع" };
+const PRIORITY_FA: Record<string, string> = { balanced: "متعادل", cheap: "ارزان", quality: "کیفیت و اصالت", fast: "ارسال سریع", warranty: "گارانتی" };
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
@@ -14,13 +14,16 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const cat = sp.cat;
   const showAll = sp.all === "1";
   const anyCar = sp.any === "1";
-  const [meta, res] = await Promise.all([api.meta(), api.search({ q, cat, all: showAll, any_car: anyCar })]);
+  const brand = sp.brand;
+  const [meta, res] = await Promise.all([api.meta(), api.search({ q, cat, all: showAll, any_car: anyCar, brand })]);
+  const prios = res.intent.priorities.length ? res.intent.priorities : (["balanced"] as const);
+  const prioLabel = prios.map((p) => PRIORITY_FA[p]).join(" + ");
 
   const catTitle = new Map(meta.categories.map((c) => [c.id, c.title]));
   const brandName = new Map(meta.brands.map((b) => [b.id, b.name]));
   const heading = q || (cat ? (meta.groups.find((g) => g.id === cat)?.title ?? catTitle.get(cat)) : "همه قطعات");
   const qs = (patch: Record<string, string | null>) => {
-    const p = new URLSearchParams({ ...(q && { q }), ...(cat && { cat }), ...(showAll && { all: "1" }), ...(anyCar && { any: "1" }) });
+    const p = new URLSearchParams({ ...(q && { q }), ...(cat && { cat }), ...(showAll && { all: "1" }), ...(anyCar && { any: "1" }), ...(brand && { brand }) });
     for (const [k, v] of Object.entries(patch)) {
       if (v === null) p.delete(k);
       else p.set(k, v);
@@ -39,21 +42,54 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
             <SlidersHorizontal className="h-4 w-4" /> دسته‌بندی
           </div>
           <ul className="space-y-1 text-sm">
+            <li>
+              <Link href={`/search?${qs({ cat: null, brand: null })}`} className={`block rounded-lg px-2 py-1.5 ${!cat ? "bg-brand-soft font-bold text-brand" : "hover:bg-canvas"}`}>
+                همه دسته‌ها
+              </Link>
+            </li>
             {meta.groups.map((g) => (
               <li key={g.id}>
-                <Link href={`/search?cat=${g.id}`} className={`block rounded-lg px-2 py-1.5 ${cat === g.id ? "bg-brand-soft font-bold text-brand" : "hover:bg-canvas"}`}>
+                <Link href={`/search?${qs({ cat: g.id, brand: null })}`} className={`block rounded-lg px-2 py-1.5 ${cat === g.id ? "bg-brand-soft font-bold text-brand" : "hover:bg-canvas"}`}>
                   {g.title}
                 </Link>
               </li>
             ))}
           </ul>
+          {q && cat && <p className="mt-2 text-[11px] text-muted">جست‌وجوی «{q}» داخل همین دسته انجام شده.</p>}
         </div>
+
+        {res.brandFacets.length > 1 && (
+          <div className="card p-4">
+            <div className="mb-2 flex items-center gap-2 text-sm font-bold">
+              <Tag className="h-4 w-4" /> برند
+            </div>
+            <ul className="max-h-72 space-y-1 overflow-y-auto text-sm">
+              <li>
+                <Link href={`/search?${qs({ brand: null })}`} className={`flex justify-between rounded-lg px-2 py-1.5 ${!brand ? "bg-brand-soft font-bold text-brand" : "hover:bg-canvas"}`}>
+                  همه برندها
+                  <span className="text-xs text-muted">{toPersianDigits(res.brandFacets.reduce((a, f) => a + f.count, 0))}</span>
+                </Link>
+              </li>
+              {res.brandFacets.map((f) => (
+                <li key={f.id}>
+                  <Link
+                    href={`/search?${qs({ brand: brand === f.id ? null : f.id })}`}
+                    className={`flex justify-between rounded-lg px-2 py-1.5 ${brand === f.id ? "bg-brand-soft font-bold text-brand" : "hover:bg-canvas"}`}
+                  >
+                    {f.name}
+                    <span className="text-xs text-muted">{toPersianDigits(f.count)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="card hidden p-4 lg:block">
           <div className="mb-1 flex items-center gap-2 text-sm font-bold">
             <Sparkles className="h-4 w-4 text-brand" /> رتبه‌بندی شفاف
           </div>
-          <p className="mb-3 text-[11px] text-muted">وزن هر عامل در رتبه‌بندی این جست‌وجو (اولویت: {PRIORITY_FA[res.intent.priority]})</p>
+          <p className="mb-3 text-[11px] text-muted">وزن هر عامل در رتبه‌بندی این جست‌وجو (اولویت: {prioLabel})</p>
           <ul className="space-y-2">
             {res.weights.map((w) => (
               <li key={w.key} className="text-xs">
@@ -118,7 +154,16 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
             {res.intent.viscosity && <span className="chip bg-navy-soft text-navy">گرانروی: {res.intent.viscosity}</span>}
             {res.intent.position && <span className="chip bg-navy-soft text-navy">{res.intent.position === "front" ? "جلو" : "عقب"}</span>}
             {res.intent.maxPrice && <span className="chip bg-navy-soft text-navy">تا {formatToman(res.intent.maxPrice)}</span>}
-            <span className="chip bg-brand-soft text-brand">اولویت: {PRIORITY_FA[res.intent.priority]}</span>
+            {prios.map((p) => (
+              <span key={p} className="chip bg-brand-soft text-brand">
+                اولویت: {PRIORITY_FA[p]}
+              </span>
+            ))}
+            {brand && (
+              <Link href={`/search?${qs({ brand: null })}`} className="chip bg-navy text-white">
+                برند: {res.brandFacets.find((f) => f.id === brand)?.name ?? brand} ✕
+              </Link>
+            )}
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
             <span>{toPersianDigits(res.results.length)} کالا</span>

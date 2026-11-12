@@ -139,7 +139,19 @@ def login(s: Session, raw_phone: str, code: str) -> SessionOut:
     return _open_session(s, u)
 
 
-def signup(s: Session, raw_phone: str, code: str, *, name: str, role: Role, shop_name: str | None) -> SessionOut:
+_URL = re.compile(r"^https?://([a-z0-9-]+\.)+[a-z]{2,}(:\d+)?(/\S*)?$", re.I)
+
+
+def normalize_website(raw: str | None) -> str:
+    url = (raw or "").strip().rstrip("/")
+    if url and not re.match(r"^https?://", url, re.I):
+        url = "https://" + url
+    if not _URL.match(url):
+        raise AuthError("آدرس سایت فروشگاه معتبر نیست (مثال: https://shop.ir)")
+    return url
+
+
+def signup(s: Session, raw_phone: str, code: str, *, name: str, role: Role, shop_name: str | None, shop_website: str | None = None) -> SessionOut:
     phone = normalize_phone(raw_phone)
     if role == "admin":
         raise AuthError("ثبت‌نام ادمین امکان‌پذیر نیست")
@@ -147,6 +159,7 @@ def signup(s: Session, raw_phone: str, code: str, *, name: str, role: Role, shop
         raise AuthError("این شماره قبلاً ثبت‌نام کرده؛ وارد شوید")
     if role == "seller" and not (shop_name or "").strip():
         raise AuthError("نام فروشگاه را وارد کنید")
+    website = normalize_website(shop_website) if role == "seller" else None
     _consume_otp(s, phone, code)
     u = User(
         id="u" + uuid.uuid4().hex[:12], name=name.strip(), phone=phone, role=role,
@@ -154,6 +167,7 @@ def signup(s: Session, raw_phone: str, code: str, *, name: str, role: Role, shop
         status="pending" if role == "seller" else "active",
         seller_id=("shop-" + uuid.uuid4().hex[:8]) if role == "seller" else None,
         shop_name=shop_name.strip() if role == "seller" and shop_name else None,
+        shop_website=website,
     )
     s.add(u)
     s.flush()

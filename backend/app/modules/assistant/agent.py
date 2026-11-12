@@ -49,7 +49,7 @@ TOOLS: list[dict[str, Any]] = [
             "properties": {
                 "query": {"type": "string", "description": "Persian search text: part name, brand, spec."},
                 "vehicle_id": {"type": "string", "description": "Vehicle model id to check fitment against, e.g. peugeot-206-t5."},
-                "priority": {"type": "string", "enum": ["balanced", "cheap", "quality", "fast"]},
+                "priority": {"type": "string", "enum": ["balanced", "cheap", "quality", "fast", "warranty"]},
                 "max_price_toman": {"type": "number"},
             },
             "required": ["query"],
@@ -91,7 +91,7 @@ class _Ctx:
 def _run_tool(name: str, args: dict[str, Any], ctx: _Ctx) -> Any:
     if name == "search_products":
         vid = args.get("vehicle_id") or ctx.active_vehicle_id
-        prio = {"cheap": " ارزان", "quality": " اصل"}.get(args.get("priority", ""), "")
+        prio = {"cheap": " ارزان", "quality": " اصل", "fast": " فوری", "warranty": " گارانتی"}.get(args.get("priority", ""), "")
         res = search_products(f"{args['query']}{prio}", vehicle_id=vid, limit=5)
         rows = [r for r in res.results if not args.get("max_price_toman") or r.best_offer.price_toman <= args["max_price_toman"]]
         for r in rows:

@@ -3,7 +3,7 @@ from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, create_engine, event
+from sqlalchemy import DateTime, ForeignKey, Integer, String, create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 
 from app.core.config import settings
@@ -26,6 +26,7 @@ class User(Base):
     status: Mapped[str] = mapped_column(String(16), default="active")  # active | pending | blocked
     seller_id: Mapped[str | None] = mapped_column(String(32), index=True)  # shop this seller manages
     shop_name: Mapped[str | None] = mapped_column(String(80))
+    shop_website: Mapped[str | None] = mapped_column(String(200))  # where click-outs land for this shop
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     active_vehicle_id: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -118,6 +119,21 @@ SessionLocal = sessionmaker(engine, expire_on_commit=False)
 
 def init_db() -> None:
     Base.metadata.create_all(engine)
+    _add_missing_columns()
+
+
+def _add_missing_columns() -> None:
+    """Tiny forward-only migration: add new *nullable* columns to existing tables, so demo data survives
+    model changes. (A real deployment would use Alembic.)"""
+    insp = inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if not insp.has_table(table.name):
+                continue
+            have = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name not in have and col.nullable:
+                    conn.execute(text(f'ALTER TABLE {table.name} ADD COLUMN {col.name} {col.type.compile(engine.dialect)}'))
 
 
 def get_session() -> Iterator[Session]:

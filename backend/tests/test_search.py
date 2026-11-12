@@ -32,3 +32,28 @@ def test_every_result_is_explained_and_sorted():
     scores = [r.score for r in res.results]
     assert scores == sorted(scores, reverse=True)
     assert all(r.reasons for r in res.results)
+
+
+def test_priorities_stack_instead_of_replacing_each_other():
+    from app.modules.search.ranker import weights_for
+
+    base = weights_for([])
+    both = weights_for(parse_intent("لنت ارزون با کیفیت").priorities)
+    assert both["price"] > base["price"] and both["quality"] > base["quality"]  # "cheap" no longer drowns "quality"
+    assert parse_intent("لنت ارزون با کیفیت").terms == []  # priority words are not search terms
+
+
+def test_fast_and_warranty_change_the_weights():
+    from app.modules.search.ranker import weights_for
+
+    base = weights_for([])
+    assert weights_for(parse_intent("لنت ارسال سریع").priorities)["speed"] > base["speed"] * 3
+    assert weights_for(parse_intent("لنت با گارانتی").priorities)["warranty"] > base["warranty"] * 3
+
+
+def test_brand_filter_and_facets():
+    allr = search_products("لنت جلو")
+    assert allr.brand_facets and sum(f.count for f in allr.brand_facets) == len(allr.results)
+    bosch = search_products("لنت جلو", brand="bosch")
+    assert bosch.results and all(r.product.brand == "bosch" for r in bosch.results)
+    assert bosch.brand_facets == allr.brand_facets  # facets stay visible so the user can switch brand

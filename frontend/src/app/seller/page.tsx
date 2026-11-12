@@ -19,6 +19,11 @@ export default async function SellerPanel() {
   return (
     <div className="space-y-5">
       <PanelTitle title={`پنل فروشنده · ${d.shopName}`} subtitle="رقابت قیمتی محصولاتتان را ببینید، قیمت و موجودی را به‌روز کنید و کلیک‌های ورودی را دنبال کنید.">
+        {d.shopWebsite && (
+          <a href={d.shopWebsite} target="_blank" rel="noopener noreferrer" className="chip bg-navy-soft text-navy" dir="ltr">
+            {d.shopWebsite.replace(/^https?:\/\//, "")}
+          </a>
+        )}
         {d.trust !== null && <span className="chip bg-amber-50 text-amber-700">امتیاز فروشگاه: {toPersianDigits((d.trust * 5).toFixed(1))} از ۵</span>}
       </PanelTitle>
 

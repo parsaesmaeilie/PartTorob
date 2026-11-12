@@ -17,11 +17,13 @@ from .intent import Priority, SearchIntent
 FEATURES = ["relevance", "fitment", "price", "quality", "trust", "availability", "warranty", "speed"]
 FEATURE_FA = {"relevance": "ارتباط با جست‌وجو", "fitment": "سازگاری با خودرو", "price": "قیمت", "quality": "کیفیت برند", "trust": "اعتبار فروشنده", "availability": "موجودی", "warranty": "گارانتی", "speed": "سرعت ارسال"}
 _BASE = {"relevance": 0.28, "fitment": 0.24, "price": 0.16, "quality": 0.12, "trust": 0.08, "availability": 0.06, "warranty": 0.03, "speed": 0.03}
+# additive boosts per priority; several priorities stack, then everything is re-normalized to 100%
 _BOOST: dict[str, dict[str, float]] = {
     "balanced": {},
-    "cheap": {"price": 0.34, "quality": 0.05},
-    "quality": {"quality": 0.26, "trust": 0.12, "warranty": 0.08, "price": 0.06},
-    "fast": {"speed": 0.2, "availability": 0.12, "price": 0.1},
+    "cheap": {"price": 0.22},
+    "quality": {"quality": 0.16, "trust": 0.05, "warranty": 0.03},
+    "fast": {"speed": 0.18, "availability": 0.06},
+    "warranty": {"warranty": 0.16, "trust": 0.03},
 }
 
 
@@ -41,14 +43,18 @@ class RankedResult(Schema):
     saving_vs_avg: float
 
 
-def weights_for(p: Priority) -> dict[str, float]:
-    w = {**_BASE, **_BOOST[p]}
+def weights_for(priorities: list[str] | str) -> dict[str, float]:
+    ps = [priorities] if isinstance(priorities, str) else priorities
+    w = dict(_BASE)
+    for p in ps:
+        for k, v in _BOOST.get(p, {}).items():
+            w[k] += v
     total = sum(w.values())
     return {k: v / total for k, v in w.items()}
 
 
-def describe_weights(p: Priority) -> list[Weight]:
-    w = weights_for(p)
+def describe_weights(priorities: list[str] | str) -> list[Weight]:
+    w = weights_for(priorities)
     return [Weight(key=k, label=FEATURE_FA[k], weight=w[k]) for k in FEATURES]
 
 
@@ -59,16 +65,18 @@ def price_trend(p: Product) -> float:
     return (h[-1].price - then) / then
 
 
-def best_offer(p: Product, priority: Priority) -> Offer:
+def best_offer(p: Product, priority: Priority | list[str]) -> Offer:
+    ps = [priority] if isinstance(priority, str) else priority
     prices = [o.price_toman for o in p.offers]
     lo, hi = min(prices), max(prices)
-    wp = 0.7 if priority == "cheap" else 0.3 if priority == "quality" else 0.5
-    ws = 0.4 if priority == "fast" else 0.1
+    wp = 0.5 + (0.2 if "cheap" in ps else 0) - (0.2 if "quality" in ps else 0)
+    ws = 0.4 if "fast" in ps else 0.1
+    ww = 0.3 if "warranty" in ps else 0.0
 
     def score(o: Offer) -> float:
         price = 1 if hi == lo else 1 - (o.price_toman - lo) / (hi - lo)
         speed = 1 - min(o.shipping_days, 6) / 6
-        return (1 if o.in_stock else -2) + wp * price + (1 - wp) * o.seller_trust + ws * speed + (0.1 if o.is_original else 0)
+        return (1 if o.in_stock else -2) + wp * price + (1 - wp) * o.seller_trust + ws * speed + ww * min(1, o.warranty_months / 18) + (0.1 if o.is_original else 0)
 
     return max(p.offers, key=score)
 
@@ -84,7 +92,7 @@ def _relevance(p: Product, intent: SearchIntent, cats: list[str]) -> float:
     return min(1.0, r)
 
 
-def _explain(p: Product, f: dict[str, float], fit: FitResult, o: Offer, saving: float, priority: Priority) -> list[str]:
+def _explain(p: Product, f: dict[str, float], fit: FitResult, o: Offer, saving: float, priorities: list[str]) -> list[str]:
     fa = to_persian_digits
     r: list[str] = []
     if fit.status == "fits":
@@ -102,7 +110,7 @@ def _explain(p: Product, f: dict[str, float], fit: FitResult, o: Offer, saving: 
     trend = price_trend(p)
     if trend < -0.03:
         r.append(f"قیمت در ۳۰ روز اخیر {fa(round(-trend * 100))}٪ کاهش یافته")
-    if priority == "cheap" and f["price"] > 0.9:
+    if "cheap" in priorities and f["price"] > 0.9:
         r.insert(0, "ارزان‌ترین گزینه سازگار")
     return r[:4]
 
@@ -110,14 +118,15 @@ def _explain(p: Product, f: dict[str, float], fit: FitResult, o: Offer, saving: 
 def rank(products: list[Product], intent: SearchIntent, *, vehicle_id: str | None = None, category: str | None = None,
          hide_incompatible: bool = True, limit: int = 60) -> list[RankedResult]:
     vehicle_id = intent.vehicle_ids[0] if intent.vehicle_ids else vehicle_id
-    w = weights_for(intent.priority)
+    prios = intent.priorities or [intent.priority]
+    w = weights_for(prios)
     cats = (GROUP_BY_ID[category].children if category in GROUP_BY_ID else [category]) if category else intent.categories
     pool = [p for p in products if p.category in cats] if cats else products
 
     candidates = []
     for p in pool:
         fit = check_fitment(p, vehicle_id)
-        offer = best_offer(p, intent.priority)
+        offer = best_offer(p, prios)
         rel = _relevance(p, intent, cats)
         if rel <= 0.05:
             continue
@@ -154,6 +163,6 @@ def rank(products: list[Product], intent: SearchIntent, *, vehicle_id: str | Non
         saving = max(0.0, (p.avg_price - o.price_toman) / p.avg_price)
         results.append(RankedResult(
             product=p, score=round(sum(w[k] * f[k] for k in FEATURES), 4), fit=fit, best_offer=o,
-            reasons=_explain(p, f, fit, o, saving, intent.priority), breakdown=f, saving_vs_avg=saving,
+            reasons=_explain(p, f, fit, o, saving, prios), breakdown=f, saving_vs_avg=saving,
         ))
     return sorted(results, key=lambda r: -r.score)[:limit]

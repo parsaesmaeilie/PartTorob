@@ -43,6 +43,7 @@ class DayCount(Schema):
 class SellerDashboard(Schema):
     seller_id: str
     shop_name: str
+    shop_website: str | None
     status: str
     trust: float | None
     listings: list[Listing]
@@ -94,7 +95,7 @@ def dashboard(s: Session, u: User) -> SellerDashboard:
     week = utcnow() - timedelta(days=7)
     src = next((x for x in SOURCES if x.id == sid), None)
     return SellerDashboard(
-        seller_id=sid, shop_name=u.shop_name or (src.name if src else "فروشگاه"), status=u.status, trust=src.trust if src else None,
+        seller_id=sid, shop_name=u.shop_name or (src.name if src else "فروشگاه"), shop_website=u.shop_website, status=u.status, trust=src.trust if src else None,
         listings=listings, total_clicks=sum(clicks_by_product.values()),
         clicks_7d=s.scalar(select(func.count()).select_from(ClickOut).where(ClickOut.seller_id == sid, ClickOut.at >= week)) or 0,
         cheapest_count=sum(1 for x in listings if x.is_cheapest), daily=daily_clicks(s, 14, sid),

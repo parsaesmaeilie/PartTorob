@@ -69,11 +69,12 @@ class SearchOut(SearchResponse):
 @router.get("/search", response_model=SearchOut)
 def search(db: DB, uid: OptionalUserId, q: str = "", cat: str | None = None, car: str | None = None,
            all: bool = False, any_car: bool = Query(False, description="ignore the garage car (a car named in the query still counts)"),
+           brand: str | None = Query(None, description="brand id filter, e.g. bosch (see brandFacets)"),
            limit: int = Query(60, ge=1, le=100)):
     a = active_vehicle(db, uid) if uid else None
     if car is None and a and not any_car:
         car = a[1].id
-    res = search_products(q, vehicle_id=car, category=cat, hide_incompatible=not all, limit=limit)
+    res = search_products(q, vehicle_id=car, category=cat, brand=brand, hide_incompatible=not all, limit=limit)
     v = get_vehicle_model(res.vehicle_id)
     return SearchOut(**res.model_dump(), vehicle_title=v.title if v else None,
                      active_vehicle_title=a[1].title if a else None, any_car=any_car)

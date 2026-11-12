@@ -23,6 +23,7 @@ class SignupIn(VerifyIn):
     name: str = Field(min_length=2, max_length=60)
     role: Literal["customer", "seller"] = "customer"
     shop_name: str | None = Field(None, max_length=80)
+    shop_website: str | None = Field(None, max_length=200)
 
 
 class UserOut(Schema):
@@ -33,6 +34,7 @@ class UserOut(Schema):
     status: str
     seller_id: str | None
     shop_name: str | None
+    shop_website: str | None
 
 
 @router.post("/otp", response_model=auth.OtpSent)
@@ -47,7 +49,7 @@ def login(body: VerifyIn, db: DB):
 
 @router.post("/signup", response_model=auth.SessionOut, status_code=201)
 def signup(body: SignupIn, db: DB):
-    return auth.signup(db, body.phone, body.code, name=body.name, role=body.role, shop_name=body.shop_name)
+    return auth.signup(db, body.phone, body.code, name=body.name, role=body.role, shop_name=body.shop_name, shop_website=body.shop_website)
 
 
 @router.post("/logout")

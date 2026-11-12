@@ -21,7 +21,8 @@ from app.modules.vehicles import VEHICLE_MODELS
 
 DEMO_USERS = [
     {"id": "u-admin", "phone": "09120000001", "name": "مدیر سامانه", "role": "admin"},
-    {"id": "u-seller", "phone": "09120000002", "name": "علی رضایی", "role": "seller", "seller_id": "yadakpart", "shop_name": "یدک‌پارت"},
+    {"id": "u-seller", "phone": "09120000002", "name": "علی رضایی", "role": "seller", "seller_id": "yadakpart", "shop_name": "یدک‌پارت",
+     "shop_website": "https://yadakpart.example"},
     {"id": "u-customer", "phone": "09120000003", "name": "پارسا اسماعیلی", "role": "customer"},
 ]
 
@@ -59,6 +60,10 @@ def seed_demo_users(s: Session) -> None:
         s.flush()
         if d["role"] == "customer":
             seed_demo_garage(s, u)
+    # backfill: shop owners created before the website field existed (".example" = reserved demo domain)
+    for u in s.scalars(select(User).where(User.role == "seller", User.shop_website.is_(None))).all():
+        slug = u.seller_id if u.seller_id and not u.seller_id.startswith("shop-") else u.id.removeprefix("u-s-")
+        u.shop_website = f"https://{slug}.example"
     s.commit()
 
 
@@ -99,11 +104,11 @@ def seed_population(s: Session) -> None:
         if src.id == "yadakpart" or i % 5 == 4:  # yadakpart is the README account; leave a few unclaimed
             continue
         s.add(User(id=f"u-s-{src.id}", name=f"{r.choice(FIRST)} {r.choice(LAST)}", phone=_phone(r, used), role="seller", status="active",
-                   seller_id=src.id, shop_name=src.name, created_at=now - timedelta(days=r.randint(60, 300))))
+                   seller_id=src.id, shop_name=src.name, shop_website=f"https://{src.id}.example", created_at=now - timedelta(days=r.randint(60, 300))))
     # ── shops that just signed up (the admin's approval queue) + one blocked shop
     for j, (shop, status) in enumerate([("قطعه‌سرای البرز", "pending"), ("یدکی نوین شیراز", "pending"), ("لوازم یدکی امید", "pending"), ("فروشگاه اسپید", "blocked")]):
         s.add(User(id=f"u-s-new{j}", name=f"{r.choice(FIRST)} {r.choice(LAST)}", phone=_phone(r, used), role="seller", status=status,
-                   seller_id=f"shop-new{j}", shop_name=shop, created_at=now - timedelta(days=r.randint(0, 6), hours=r.randint(1, 20))))
+                   seller_id=f"shop-new{j}", shop_name=shop, shop_website=f"https://shop-new{j}.example", created_at=now - timedelta(days=r.randint(0, 6), hours=r.randint(1, 20))))
     s.commit()
     seed_clickouts(s, r, now)
 

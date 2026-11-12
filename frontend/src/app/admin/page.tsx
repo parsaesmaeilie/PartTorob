@@ -84,6 +84,7 @@ export default async function AdminPanel() {
                 <th className="p-3">محصول</th>
                 <th className="p-3">کلیک</th>
                 <th className="p-3 text-right">مالک</th>
+                <th className="p-3">سایت</th>
                 <th className="p-3">وضعیت</th>
                 <th className="p-3" />
               </tr>
@@ -106,6 +107,15 @@ export default async function AdminPanel() {
                       </>
                     ) : (
                       <span className="text-muted">—</span>
+                    )}
+                  </td>
+                  <td className="p-3 text-center text-xs" dir="ltr">
+                    {s.website ? (
+                      <a href={s.website} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">
+                        {s.website.replace(/^https?:\/\//, "")}
+                      </a>
+                    ) : (
+                      "—"
                     )}
                   </td>
                   <td className="p-3 text-center">

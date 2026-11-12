@@ -1,7 +1,7 @@
 /** Wire types — mirror the FastAPI Pydantic schemas (camelCase aliases). */
 
 export type FitStatus = "fits" | "no-fit" | "universal" | "unknown";
-export type Priority = "balanced" | "cheap" | "quality" | "fast";
+export type Priority = "balanced" | "cheap" | "quality" | "fast" | "warranty";
 export type DueStatus = "ok" | "soon" | "overdue";
 
 export interface FitResult {
@@ -66,6 +66,7 @@ export interface SearchIntent {
   position: "front" | "rear" | null;
   maxPrice: number | null;
   priority: Priority;
+  priorities: Priority[];
   terms: string[];
 }
 
@@ -76,6 +77,8 @@ export interface SearchResponse {
   vehicleTitle: string | null;
   activeVehicleTitle: string | null;
   anyCar: boolean;
+  brand: string | null;
+  brandFacets: { id: string; name: string; count: number }[];
   weights: { key: string; label: string; weight: number }[];
 }
 
@@ -195,6 +198,7 @@ export interface SellerListing {
 export interface SellerDashboard {
   sellerId: string;
   shopName: string;
+  shopWebsite: string | null;
   status: "active" | "pending" | "blocked";
   trust: number | null;
   listings: SellerListing[];
@@ -222,6 +226,7 @@ export interface AdminOverview {
     ownerId: string | null;
     ownerName: string | null;
     ownerPhone: string | null;
+    website: string | null;
     status: "active" | "pending" | "blocked" | "unclaimed";
   }[];
   users: { id: string; name: string; phone: string; role: Role; status: string; shopName: string | null; vehicles: number; createdAt: string }[];

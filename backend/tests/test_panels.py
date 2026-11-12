@@ -29,11 +29,12 @@ def test_seller_price_typo_guard(client, seller):
 def test_new_seller_is_pending_until_admin_approves(client, admin):
     phone = "09191234567"
     code = client.post("/api/v1/auth/otp", json={"phone": phone}).json()["devCode"]
-    s = client.post("/api/v1/auth/signup", json={"phone": phone, "code": code, "name": "مینا", "role": "seller", "shopName": "قطعه‌سرا"}).json()
+    s = client.post("/api/v1/auth/signup", json={"phone": phone, "code": code, "name": "مینا", "role": "seller", "shopName": "قطعه‌سرا", "shopWebsite": "ghetesara.ir"}).json()
     assert s["role"] == "seller" and s["status"] == "pending"
     ov = client.get("/api/v1/admin/overview", headers=admin).json()
     assert ov["pendingSellers"] >= 1
     shop = next(x for x in ov["shops"] if x["ownerPhone"] == phone)
+    assert shop["website"] == "https://ghetesara.ir"  # scheme added, stored, shown to admin
     assert shop["status"] == "pending" and shop["source"] == "registered"
     assert client.patch(f"/api/v1/admin/users/{s['userId']}/status", json={"status": "active"}, headers=admin).status_code == 200
     me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {s['token']}"}).json()
@@ -63,3 +64,11 @@ def test_admin_cannot_be_blocked(client, admin):
     me = client.get("/api/v1/auth/me", headers=admin).json()
     assert client.patch(f"/api/v1/admin/users/{me['id']}/status", json={"status": "blocked"}, headers=admin).status_code == 422
     assert login(client, "09120000001")  # still able to log in
+
+
+def test_seller_signup_requires_a_valid_website(client):
+    phone = "09191112233"
+    for bad in (None, "not a url", "http://localhost"):
+        code = client.post("/api/v1/auth/otp", json={"phone": phone}).json()["devCode"]
+        r = client.post("/api/v1/auth/signup", json={"phone": phone, "code": code, "name": "تست", "role": "seller", "shopName": "x", "shopWebsite": bad})
+        assert r.status_code == 422, bad
